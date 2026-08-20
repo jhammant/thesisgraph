@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# COPYRIGHT: none of the following may ever be committed.
+#
+# The theses in this corpus are in copyright. The UK text-and-data-mining
+# exception (s.29A CDPA) permits computational ANALYSIS of lawfully accessed
+# works; it does not permit redistributing them. Everything below is either the
+# works themselves or text extracted from them.
+# ---------------------------------------------------------------------------
+pdfs/
+corpus/
+cache/
+selftest_fixtures/
+
+# Generated artefacts that embed thesis full text
+out/viewer.html
+out/app.html
+out_selftest/
+
+# Generated artefacts that are safe (titles/metadata/links only) but large;
+# regenerate with `make_graph_app.py`
+out/graph.html
+out/public/
+
+# Local outputs
+out/
+*.log
+*.txt.err
+study4_discourse.txt
+corpus_method_study.txt
+corpus_report.txt
+corpus_focal_check.txt
+subfields.txt
+verification_notes.md
+
+# Environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.err
