@@ -351,7 +351,7 @@ def main():
     Built from openly deposited theses in White Rose eTheses Online. Titles,
     metadata and links are public bibliographic facts; no thesis text is
     reproduced here. Method and source:
-    <a href="https://github.com/" style="color:var(--acc)">thesisgraph</a>.</p>
+    <a href="https://github.com/jhammant/thesisgraph" target="_blank" rel="noopener" style="color:var(--acc)">source &amp; method on GitHub</a>.</p>
   </aside>
 </main>
 <script type="application/json" id="p">{payload}</script>

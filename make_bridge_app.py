@@ -262,6 +262,7 @@ def main():
     <select id="fb"></select>
     <input type="search" id="q" placeholder="search work, title or thesis">
     <a class="nav" href="{graph_link}">graph view →</a>
+    <a class="nav" href="https://github.com/jhammant/thesisgraph" target="_blank" rel="noopener">source →</a>
   </div>
 </div></header>
 <main><div class="wrap">
@@ -273,7 +274,9 @@ def main():
   is not a crossover. Passages are the sentence in which the citing thesis
   mentions the work, quoted briefly with its page for reference; follow the link
   to read it in context in the original deposit. Sources: openly deposited
-  theses in White Rose eTheses Online.</p>
+  theses in White Rose eTheses Online.
+  <a href="https://github.com/jhammant/thesisgraph" target="_blank" rel="noopener" style="color:var(--acc)">Source
+  and method on GitHub</a>.</p>
 </div></main>
 <script type="text/plain" id="p">{payload}</script>
 <script>window.__APPJS__={appjs};</script>
