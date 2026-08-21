@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""make_bridge_app.py — the cross-field reader.
+
+A graph tells you Education and Biology have a Jaccard of 0.017. That is not
+actionable. This answers the next three questions instead:
+
+    which works bridge these two fields?
+    which theses on each side cite them?
+    where exactly — page, chapter, and the sentence — so you can go and read it?
+
+Every passage carries a deep link to that page of the source PDF.
+"""
+from __future__ import annotations
+import argparse, base64, gzip, json
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+B = json.loads((HERE / "corpus" / "bridges.json").read_text(encoding="utf-8"))
+D = json.loads((HERE / "corpus" / "docs.json").read_text(encoding="utf-8"))
+OUT = HERE / "out" / "bridges.html"
+PUB = HERE / "out" / "public" / "bridges.html"
+
+CSS = """
+:root{--bg:#0f1115;--panel:#171a21;--card:#1c202a;--fg:#e8eaf0;--mut:#8b93a7;
+--line:#262b36;--acc:#5b9cff;--acc2:#ffb302;--ok:#4ecf8f}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,BlinkMacSystemFont,
+"Segoe UI",Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;height:100vh}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:11px 16px;flex:0 0 auto}
+.top{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+h1{font-size:15px;margin:0;font-weight:650}
+h1 small{display:block;font-weight:400;color:var(--mut);font-size:11.5px;margin-top:2px}
+.sel{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+select,input[type=search]{background:var(--bg);border:1px solid var(--line);color:var(--fg);
+border-radius:7px;padding:6px 9px;font:inherit}
+select{max-width:230px}
+a.nav{color:var(--acc);text-decoration:none;font-size:12px}
+main{flex:1 1 auto;overflow-y:auto;padding:16px}
+.wrap{max-width:1180px;margin:0 auto}
+.count{color:var(--mut);font-size:12px;margin-bottom:12px}
+.bridge{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+margin-bottom:12px;overflow:hidden}
+.bh{padding:12px 15px;cursor:pointer;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.bh:hover{background:var(--card)}
+.bh .w{font-weight:650;font-size:14.5px}
+.bh .ti{color:var(--mut);font-size:12.5px;flex:1 1 260px}
+.pair{font-size:11.5px;background:var(--card);border:1px solid var(--line);
+border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pair b{color:var(--acc)}
+.nn{color:var(--mut);font-size:11.5px;white-space:nowrap}
+.body{display:none;border-top:1px solid var(--line);padding:4px 15px 14px}
+.bridge.open .body{display:block}
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
+@media(max-width:900px){.sides{grid-template-columns:1fr}}
+.side h4{margin:8px 0 8px;font-size:12px;color:var(--acc);text-transform:uppercase;
+letter-spacing:.05em}
+.th{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px;
+margin-bottom:9px}
+.th .t{font-size:12.8px;font-weight:600;line-height:1.4}
+.th .m{color:var(--mut);font-size:11px;margin:3px 0 7px}
+.pg{border-left:2px solid var(--line);padding:4px 0 4px 10px;margin:7px 0;font-size:12.3px}
+.pg .loc{color:var(--mut);font-size:11px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pg .loc a{color:var(--acc2);text-decoration:none;font-weight:600}
+.pg .loc a:hover{text-decoration:underline}
+.pg q{display:block;margin-top:3px;color:var(--fg);quotes:none}
+.pg q:before{content:'"'}.pg q:after{content:'"'}
+.chip{background:#0f1115;border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:10px}
+.empty{color:var(--mut);padding:40px;text-align:center;font-style:italic}
+a.drill{color:var(--acc);cursor:pointer;text-decoration:none}
+a.drill:hover{text-decoration:underline}
+.doc{background:#12151c;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+margin:6px 0 9px}
+.doc .dm{color:var(--mut);font-size:11px;margin-bottom:6px}
+.doc .ab{font-size:12px;color:var(--fg);opacity:.9;margin-bottom:9px;line-height:1.55}
+.toch{color:var(--acc);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+margin:8px 0 5px}
+.tocrow{display:flex;gap:8px;align-items:baseline;font-size:11.8px;padding:2px 0;
+border-bottom:1px solid #1d2230}
+.tocrow a{color:var(--acc2);text-decoration:none;font-weight:600;min-width:44px}
+.tocrow .tb{color:var(--mut);font-size:10px;min-width:86px}
+.tocrow .tt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk2{margin-top:8px;font-size:11.5px}
+.lk2 a{color:var(--acc);text-decoration:none;margin-right:10px}
+.note{color:var(--mut);font-size:11.5px;border-top:1px solid var(--line);margin-top:22px;
+padding-top:12px;line-height:1.6}
+"""
+
+JS = r"""
+(function(){
+var W=window.__B__.works, A=document.getElementById('fa'), Bx=document.getElementById('fb'),
+    Q=document.getElementById('q'), L=document.getElementById('list'), C=document.getElementById('count');
+var fields={}; W.forEach(function(w){ fields[w.a]=1; fields[w.b]=1; });
+var fs=Object.keys(fields).sort();
+[A,Bx].forEach(function(s,i){
+  s.innerHTML='<option value="">'+(i?'…and any field':'any field…')+'</option>'+
+    fs.map(function(f){return '<option>'+esc(f)+'</option>';}).join(''); });
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){
+  return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';});}
+function match(w){
+  var a=A.value,b=Bx.value;
+  if(a&&b){ if(!((w.a===a&&w.b===b)||(w.a===b&&w.b===a))) return false; }
+  else if(a){ if(w.a!==a&&w.b!==a) return false; }
+  else if(b){ if(w.a!==b&&w.b!==b) return false; }
+  var q=(Q.value||'').toLowerCase();
+  if(q){
+    var hay=(w.w+' '+w.title+' '+w.a+' '+w.b).toLowerCase();
+    if(hay.indexOf(q)<0){
+      var deep=false;
+      for(var k in w.sides){ w.sides[k].forEach(function(e){
+        if((e.t+' '+k).toLowerCase().indexOf(q)>=0) deep=true; }); }
+      if(!deep) return false; }
+  }
+  return true;
+}
+function docPanel(id){
+  var d=(window.__DOCS__||{})[id];
+  if(!d) return '<div class="mut" style="font-size:11.5px">No document record.</div>';
+  var toc=(d.toc||[]).map(function(t){
+    var link=d.pdf?(d.pdf+'#page='+t.pg):d.u;
+    return '<div class="tocrow">'+
+      (link?'<a href="'+esc(link)+'" target="_blank" rel="noopener">p.'+t.pg+'</a>':'p.'+t.pg)+
+      (t.pr?'<span class="chip">pr.'+esc(t.pr)+'</span>':'')+
+      '<span class="tb">'+esc(t.b||'')+'</span>'+
+      '<span class="tt">'+esc(t.h)+'</span></div>'; }).join('');
+  return '<div class="doc">'+
+    '<div class="dm">'+esc(d.a||'unknown author')+' · '+esc(d.i||'')+' · '+(d.y||'')+
+    ' · '+(d.pg||'?')+' pages · '+((d.w||0)/1000).toFixed(0)+'k words</div>'+
+    (d.ab?'<div class="ab">'+esc(d.ab)+'</div>':'')+
+    (toc?'<div class="tocb"><div class="toch">contents — jump into the PDF</div>'+toc+'</div>':'')+
+    '<div class="lk2">'+
+      (d.u?'<a href="'+esc(d.u)+'" target="_blank" rel="noopener">repository record ↗</a>':'')+
+      (d.pdf?' <a href="'+esc(d.pdf)+'" target="_blank" rel="noopener">full PDF ↗</a>':'')+
+    '</div></div>';
+}
+function passage(p,e){
+  var pg=p.pg, link=e.pdf?(e.pdf+'#page='+pg):e.u;
+  return '<div class="pg"><div class="loc">'+
+    (link?'<a href="'+esc(link)+'" target="_blank" rel="noopener">read p.'+pg+' ↗</a>':'p.'+pg)+
+    (p.pr?'<span class="chip">printed p.'+esc(p.pr)+'</span>':'')+
+    (p.b?'<span class="chip">'+esc(p.b)+'</span>':'')+
+    (p.h?'<span class="chip">'+esc(p.h.slice(0,44))+'</span>':'')+
+    '</div><q>'+esc(p.s)+'</q></div>';
+}
+function render(){
+  var vis=W.filter(match);
+  C.textContent=vis.length+' bridging work'+(vis.length===1?'':'s')+
+    (A.value||Bx.value?' for this pairing':'')+
+    ' · '+vis.reduce(function(a,w){var n=0;for(var k in w.sides)n+=w.sides[k].length;return a+n;},0)+
+    ' theses · click a work to read the passages';
+  if(!vis.length){ L.innerHTML='<div class="empty">No bridging works found for that '+
+    'pairing. Not every pair of fields shares specific literature — that absence '+
+    'is itself the finding.</div>'; return; }
+  L.innerHTML=vis.map(function(w,i){
+    var sides=Object.keys(w.sides).sort(function(x,y){
+      return w.sides[y].length-w.sides[x].length; });
+    return '<div class="bridge" data-i="'+i+'">'+
+      '<div class="bh"><span class="w">'+esc(w.w)+'</span>'+
+      '<span class="ti">'+esc(w.title)+'</span>'+
+      '<span class="pair"><b>'+esc(w.a)+'</b> ⇄ <b>'+esc(w.b)+'</b></span>'+
+      '<span class="nn">'+w.n+' theses cite it</span></div>'+
+      '<div class="body"><div class="sides">'+
+      sides.slice(0,2).map(function(k){
+        return '<div class="side"><h4>'+esc(k)+' ('+w.sides[k].length+')</h4>'+
+          w.sides[k].map(function(e){
+            return '<div class="th"><div class="t">'+
+              (e.u?'<a href="'+esc(e.u)+'" target="_blank" rel="noopener" '+
+                   'style="color:inherit;text-decoration:none">'+esc(e.t)+' ↗</a>':esc(e.t))+
+              '</div><div class="m">'+esc(e.sf||'')+(e.y?' · '+e.y:'')+
+              (e.id?' · <a class="drill" data-d="'+esc(e.id)+'">open thesis ▾</a>':'')+'</div>'+
+              '<div class="docwrap" data-for="'+esc(e.id||'')+'"></div>'+
+              e.p.map(function(p){return passage(p,e);}).join('')+'</div>'; }).join('')+
+          '</div>'; }).join('')+
+      '</div>'+(sides.length>2?'<div class="nn" style="margin-top:8px">also cited in: '+
+        sides.slice(2).map(esc).join(', ')+'</div>':'')+'</div></div>'; }).join('');
+  L.querySelectorAll('.bh').forEach(function(h){
+    h.onclick=function(){ h.parentNode.classList.toggle('open'); }; });
+  L.querySelectorAll('.drill').forEach(function(a){
+    a.onclick=function(ev){ ev.stopPropagation();
+      var w=a.closest('.th').querySelector('.docwrap');
+      if(w.innerHTML){ w.innerHTML=''; a.textContent='open thesis ▾'; }
+      else { w.innerHTML=docPanel(a.dataset.d); a.textContent='hide thesis ▴'; } }; });
+}
+[A,Bx].forEach(function(s){ s.onchange=render; });
+Q.oninput=render;
+document.getElementById('swap').onclick=function(){
+  var t=A.value; A.value=Bx.value; Bx.value=t; render(); };
+render();
+})();
+"""
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--public", action="store_true")
+    args = ap.parse_args()
+    out = PUB if args.public else OUT
+    # The host serves static files uncompressed, and the payload is ~18 MB raw.
+    # Rather than gut the data, gzip it into the page and inflate in the browser
+    # with DecompressionStream: ~4x smaller over the wire, still one self-
+    # contained file that opens from file:// with no server and no network.
+    raw = json.dumps({"works": B["works"], "docs": D},
+                     separators=(",", ":")).encode("utf-8")
+    payload = base64.b64encode(gzip.compress(raw, 9)).decode("ascii")
+    print(f"  payload {len(raw)/1e6:.1f} MB -> {len(payload)/1e6:.1f} MB embedded "
+          f"({100*len(payload)/len(raw):.0f}%)")
+    graph_link = "index.html" if args.public else "graph.html"
+    appjs = json.dumps(JS)
+    html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where fields cross over</title><style>{CSS}</style></head><body>
+<header><div class="top">
+  <h1>Where fields cross over
+    <small>the specific works two fields share, and the page to read it on</small></h1>
+  <div class="sel">
+    <select id="fa"></select>
+    <button class="nav" id="swap" style="background:none;border:0;cursor:pointer">⇄</button>
+    <select id="fb"></select>
+    <input type="search" id="q" placeholder="search work, title or thesis">
+    <a class="nav" href="{graph_link}">graph view →</a>
+  </div>
+</div></header>
+<main><div class="wrap">
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+  <p class="note">A bridging work is one cited by theses in two different
+  disciplines, and <b>not</b> by many others — universal methods literature such
+  as Braun &amp; Clarke is excluded, because "both fields use thematic analysis"
+  is not a crossover. Passages are the sentence in which the citing thesis
+  mentions the work, quoted briefly with its page for reference; follow the link
+  to read it in context in the original deposit. Sources: openly deposited
+  theses in White Rose eTheses Online.</p>
+</div></main>
+<script type="text/plain" id="p">{payload}</script>
+<script>window.__APPJS__={appjs};</script>
+<script>
+(async function(){{
+  var b64=document.getElementById('p').textContent.trim();
+  var bin=Uint8Array.from(atob(b64),function(c){{return c.charCodeAt(0);}});
+  var txt;
+  if (typeof DecompressionStream!=='undefined') {{
+    var ds=new DecompressionStream('gzip');
+    var stream=new Blob([bin]).stream().pipeThrough(ds);
+    txt=await new Response(stream).text();
+  }} else {{
+    document.getElementById('list').innerHTML=
+      '<div class="empty">This browser lacks DecompressionStream; '+
+      'please use a current Chrome, Safari or Firefox.</div>';
+    return;
+  }}
+  var D=JSON.parse(txt);
+  window.__B__={{works:D.works}}; window.__DOCS__=D.docs;
+  var s=document.createElement('script'); s.textContent=window.__APPJS__; document.body.appendChild(s);
+}})();
+</script>
+</body></html>"""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    print(f"written {out} ({out.stat().st_size/1024:.0f} KB)")
+
+
+if __name__ == "__main__":
+    main()
