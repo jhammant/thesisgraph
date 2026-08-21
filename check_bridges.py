@@ -73,6 +73,25 @@ def main():
               "search with no hits shows the empty state")
         check(c.js("document.body.scrollWidth <= window.innerWidth + 2"),
               "no horizontal overflow")
+        # the pair roster: every thesis linking the two selected fields
+        c.js("""(function(){var q=document.getElementById('q');q.value='';
+          q.dispatchEvent(new Event('input'));})()""")   # clear the earlier search
+        time.sleep(0.3)
+        c.js("""(function(){var a=document.getElementById('fa'),b=document.getElementById('fb');
+          a.value='Biological sciences'; b.value='Medicine and health';
+          a.dispatchEvent(new Event('change'));})()""")
+        time.sleep(0.7)
+        rr = c.js("document.querySelectorAll('.roster .rrow').length")
+        rs = c.js("document.querySelectorAll('.roster .side').length")
+        check(rr > 20 and rs == 2,
+              f"pair roster lists every linking thesis ({rr} theses across {rs} sides)")
+        cw = c.js("""(function(){var e=document.querySelector('.roster .rm');
+          return e?e.textContent:'';})()""")
+        check("cites" in cw, f"roster shows which shared works each cites: {cw[:64]!r}")
+        c.js("""document.querySelector('.roster .drill').click()""")
+        time.sleep(0.5)
+        check(c.js("document.querySelectorAll('.roster .doc .tocrow').length") > 3,
+              "roster entries drill into the thesis contents too")
         # drill-down into the thesis document itself
         c.js("""(function(){var q=document.getElementById('q');q.value='';
           q.dispatchEvent(new Event('input'));})()""")

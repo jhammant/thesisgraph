@@ -199,7 +199,7 @@ def build(workers):
             for src in srcs:
                 rows = con.execute(
                     "SELECT snippet,page,printed,bucket,heading FROM ctx "
-                    "WHERE src=? AND surname=? AND year=? LIMIT 3",
+                    "WHERE src=? AND surname=? AND year=? LIMIT 2",
                     (src, s, int(y))).fetchall()
                 if not rows:
                     continue
@@ -213,7 +213,7 @@ def build(workers):
                             "p": [{"s": r[0], "pg": r[1], "pr": r[2],
                                    "b": r[3], "h": r[4]} for r in rows]})
             if ent:
-                sides[d] = ent[:8]
+                sides[d] = ent          # every citing thesis, not a sample
         if len(sides) >= 2:
             payload.append({"w": f"{s.title()} ({y})", "title": t,
                             "score": w["score"], "a": w["a"], "b": w["b"],

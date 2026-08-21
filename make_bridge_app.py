@@ -66,6 +66,13 @@ margin-bottom:9px}
 .pg q:before{content:'"'}.pg q:after{content:'"'}
 .chip{background:#0f1115;border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:10px}
 .empty{color:var(--mut);padding:40px;text-align:center;font-style:italic}
+.roster{background:var(--panel);border:1px solid var(--acc);border-radius:11px;
+padding:12px 15px;margin-bottom:16px}
+.rh{font-size:12.5px;font-weight:650;margin-bottom:4px}
+.mut2{color:var(--mut);font-weight:400;font-size:11.5px}
+.rrow{padding:6px 0;border-bottom:1px solid var(--line)}
+.rrow a.drill{font-size:12.6px;font-weight:600}
+.rrow .rm{color:var(--mut);font-size:11px;margin-top:2px}
 a.drill{color:var(--acc);cursor:pointer;text-decoration:none}
 a.drill:hover{text-decoration:underline}
 .doc{background:#12151c;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
@@ -141,6 +148,39 @@ function passage(p,e){
     (p.h?'<span class="chip">'+esc(p.h.slice(0,44))+'</span>':'')+
     '</div><q>'+esc(p.s)+'</q></div>';
 }
+function roster(vis){
+  /* Every thesis linking the two selected fields, across ALL their shared
+     works — deduplicated, with how many of those works each one cites. */
+  if(!(A.value&&Bx.value)) return '';
+  var by={};
+  vis.forEach(function(w){
+    Object.keys(w.sides).forEach(function(k){
+      w.sides[k].forEach(function(e){
+        var d=(window.__DOCS__||{})[e.id]||{};
+        var side=(d.d===A.value)?A.value:(d.d===Bx.value)?Bx.value:null;
+        if(!side) return;
+        var b=by[side]=by[side]||{};
+        var r=b[e.id]=b[e.id]||{t:e.t,y:e.y,sf:e.sf,u:e.u,id:e.id,works:[]};
+        if(r.works.indexOf(w.w)<0) r.works.push(w.w);
+      }); }); });
+  var sides=[A.value,Bx.value].filter(function(k){return by[k];});
+  if(!sides.length) return '';
+  return '<div class="roster"><div class="rh">every thesis linking these two '+
+    'fields <span class="mut2">— click a title to open the thesis, or a work to '+
+    'jump to it below</span></div><div class="sides">'+
+    sides.map(function(k){
+      var rows=Object.keys(by[k]).map(function(id){return by[k][id];})
+        .sort(function(x,y){return y.works.length-x.works.length ||
+              (x.t<y.t?-1:1);});
+      return '<div class="side"><h4>'+esc(k)+' — '+rows.length+' theses</h4>'+
+        rows.map(function(r){
+          return '<div class="rrow"><a class="drill" data-d="'+esc(r.id)+'">'+
+            esc(r.t)+'</a><div class="rm">'+esc(r.sf||'')+(r.y?' · '+r.y:'')+
+            ' · cites '+r.works.length+' shared work'+(r.works.length===1?'':'s')+
+            ': '+r.works.map(esc).join(', ')+'</div>'+
+            '<div class="docwrap" data-for="'+esc(r.id)+'"></div></div>'; }).join('')+
+        '</div>'; }).join('')+'</div></div>';
+}
 function render(){
   var vis=W.filter(match);
   C.textContent=vis.length+' bridging work'+(vis.length===1?'':'s')+
@@ -150,14 +190,17 @@ function render(){
   if(!vis.length){ L.innerHTML='<div class="empty">No bridging works found for that '+
     'pairing. Not every pair of fields shares specific literature — that absence '+
     'is itself the finding.</div>'; return; }
-  L.innerHTML=vis.map(function(w,i){
+  L.innerHTML=roster(vis)+vis.map(function(w,i){
     var sides=Object.keys(w.sides).sort(function(x,y){
       return w.sides[y].length-w.sides[x].length; });
     return '<div class="bridge" data-i="'+i+'">'+
       '<div class="bh"><span class="w">'+esc(w.w)+'</span>'+
       '<span class="ti">'+esc(w.title)+'</span>'+
       '<span class="pair"><b>'+esc(w.a)+'</b> ⇄ <b>'+esc(w.b)+'</b></span>'+
-      '<span class="nn">'+w.n+' theses cite it</span></div>'+
+      '<span class="nn">'+w.n+' theses cite it'+
+        (function(){var shown=0;for(var k in w.sides)shown+=w.sides[k].length;
+          return shown<w.n?' · '+shown+' with a located passage':'';})()+
+      '</span></div>'+
       '<div class="body"><div class="sides">'+
       sides.slice(0,2).map(function(k){
         return '<div class="side"><h4>'+esc(k)+' ('+w.sides[k].length+')</h4>'+
@@ -176,9 +219,10 @@ function render(){
     h.onclick=function(){ h.parentNode.classList.toggle('open'); }; });
   L.querySelectorAll('.drill').forEach(function(a){
     a.onclick=function(ev){ ev.stopPropagation();
-      var w=a.closest('.th').querySelector('.docwrap');
-      if(w.innerHTML){ w.innerHTML=''; a.textContent='open thesis ▾'; }
-      else { w.innerHTML=docPanel(a.dataset.d); a.textContent='hide thesis ▴'; } }; });
+      var w=a.closest('.th,.rrow').querySelector('.docwrap');
+      if(w.innerHTML){ w.innerHTML=''; a.textContent=a.dataset.lbl||'open thesis ▾'; }
+      else { a.dataset.lbl=a.dataset.lbl||a.textContent;
+        w.innerHTML=docPanel(a.dataset.d); } }; });
 }
 [A,Bx].forEach(function(s){ s.onchange=render; });
 Q.oninput=render;
