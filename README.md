@@ -80,6 +80,54 @@ a fingerprint. Verified empirically: 300/300 detection at 20 words, 210/300 at
 
 In practice: **303,946,840 pairs → 222,881 candidates, a 1,363× reduction.**
 
+## One command line
+
+Everything above is reachable through `tg`, a plugin host that discovers each
+`tg_*.py` module beside it. A module that fails to import is named in a warning
+and skipped; the rest keep working.
+
+```bash
+tg search "thermal runaway" --discipline Engineering --from 2015
+tg check my-thesis.pdf          # screen your OWN thesis, with the baseline beside it
+tg similar --id <oai-id> --cross-discipline
+tg canon --section flow
+tg release --out out/release    # text-free dataset + datasheet + checksums
+tg site --out out/site          # one publishable static site
+```
+
+| Command | Does |
+|---|---|
+| `tg search` | BM25 full-text over titles, abstracts and authors, with structured filters; `--stats` for corpus shape |
+| `tg check` | screens a local PDF against the corpus, applying the same filters the corpus screen uses, and prints the corpus baseline beside every number |
+| `tg similar` | nearest-neighbour theses by id, free text or title; `--cross-discipline` surfaces work outside your own department |
+| `tg canon` | most-cited works per field, citation age and half-life, and a field-to-field flow matrix |
+| `tg release` | builds a text-free derived dataset with a datasheet, a manifest and SHA256SUMS |
+| `tg site` | builds one self-contained site: search, methods, findings |
+
+`tg check` writes a **local working document**. It quotes matched passages, so it
+embeds thesis text and must not be published. `tg release` and `tg site` produce
+the two artefacts that are meant to be published, and only those.
+
+### What the leak check does and does not guarantee
+
+`tg release --check` and `check_site.py` scan the built artefacts for runs of
+thesis body text. They are a backstop against an honest mistake — a schema change
+that adds a prose column, a field that turns out to carry more text than expected
+— and they are worth running.
+
+They are **not** an adversarial control, and should not be described as one. Both
+scan a sample of the corpus rather than all of it; both compare stored bytes
+rather than rendered text; and neither can reason about text arriving from
+outside the pipeline, such as a hand-edited file dropped into `out/analytics/`.
+An adversary able to write to the source databases, the command line or the
+intermediate directories can get text past either of them, and this has been
+demonstrated rather than assumed.
+
+The guarantee that actually holds is structural: the release emits only columns
+on a per-file allow-list, every value is length-capped, and no stage of either
+build reads `corpus/text/` or `corpus/tokens/`. The scans check that the
+structure did what it claims.
+
 ## What this measures — and what it does not
 
 It measures **textual reuse**. It cannot detect fabricated data, ghostwriting or
