@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "The documents to compare. Copy to documents.json and edit.",
+    "documents.json is gitignored: it names real works, and this tool measures",
+    "textual overlap, which is a measurement and not an accusation.",
+    "",
+    "Exactly one document must have role 'focal-earlier' and one 'focal-later'.",
+    "Every other document is a control, and the controls are the point: a raw",
+    "similarity score between two documents in the same field means very little",
+    "on its own. Use at least two, in the same discipline, on adjacent topics.",
+    "",
+    "pdf_url may be left empty if landing_url is an EPrints-style page; the",
+    "first PDF link on it is used. expected_pages is optional; when set, the",
+    "run aborts if the fetched document is a different length, because that",
+    "means the repository served a different deposit."
+  ],
+  "documents": [
+    {
+      "key": "EARLIER",
+      "short": "EARLIER",
+      "label": "Author, A. (2009), Example University",
+      "surname": "Author",
+      "year": 2009,
+      "filename": "earlier.pdf",
+      "landing_url": "https://repository.example.ac.uk/id/eprint/1234/",
+      "pdf_url": "",
+      "expected_pages": null,
+      "role": "focal-earlier"
+    },
+    {
+      "key": "LATER",
+      "short": "LATER",
+      "label": "Writer, B. (2015), Example Institute",
+      "surname": "Writer",
+      "year": 2015,
+      "filename": "later.pdf",
+      "landing_url": "https://repository.example.ac.uk/id/eprint/5678/",
+      "pdf_url": "",
+      "expected_pages": null,
+      "role": "focal-later"
+    },
+    {
+      "key": "CONTROL1",
+      "short": "CONTROL1",
+      "label": "Third, C. (2022), Example College",
+      "surname": "Third",
+      "year": 2022,
+      "filename": "control1.pdf",
+      "landing_url": "https://repository.example.ac.uk/id/eprint/9012/",
+      "pdf_url": "",
+      "expected_pages": null,
+      "role": "control"
+    },
+    {
+      "key": "CONTROL2",
+      "short": "CONTROL2",
+      "label": "Fourth, D. (2025), Example School",
+      "surname": "Fourth",
+      "year": 2025,
+      "filename": "control2.pdf",
+      "landing_url": "https://repository.example.ac.uk/id/eprint/3456/",
+      "pdf_url": "",
+      "expected_pages": null,
+      "role": "control"
+    }
+  ]
+}

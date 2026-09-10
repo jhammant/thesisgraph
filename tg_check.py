@@ -98,7 +98,7 @@ BASELINE_MIN_FP = 3
 # lower bound. Measured: control_alhumaidan_2025.pdf, 322 pages, 269 documents
 # in its neighbourhood — 86 s wall and 306 MB peak RSS with no cap, against 75 s
 # capped at 200. Peak RSS is dominated by the largest candidate rebuilt, not by
-# the number of them: later_later_2015.pdf, 162 candidates, peaks at 2.4 GB.
+# the number of them: a 401-page thesis, 162 candidates, peaks at 2.4 GB.
 DEFAULT_MAX_CANDIDATES = 0   # 0 = score every document over the threshold
 DF_MAX_FRAC = 0.004          # same document-frequency pruning as screen_corpus
 

@@ -6,9 +6,9 @@ Unlike the overlap screen (O(N^2), happy with a few hundred documents), every
 study here is linear in the corpus and wants as many theses as we can get.
 
     method     Study 3 — method and reporting practice
-    validate   Run the method extractor over the four theses already fetched by
-               run_analysis.py, whose contents are known, so the extractor can
-               be checked by eye before it is trusted on thousands.
+    validate   Run the method extractor over documents you supplied in
+               documents.json, so it can be checked by eye before it is
+               trusted on thousands.
 
 Paths anchor to this file's location, not the shell's working directory.
 """
@@ -229,12 +229,13 @@ def _load_corpus_doc(doc_id: str) -> list[tuple]:
 # --------------------------------------------------------------------------- #
 
 def validate() -> int:
-    """Run the extractor over the four theses whose contents we already know."""
-    info = R.ensure_pdfs(R.REAL_DOCS, True, R.PDF_DIR)
+    """Run the extractor over documents you supplied, to eyeball the output."""
+    specs = R.load_documents()
+    info = R.ensure_pdfs(specs, True, R.PDF_DIR)
     print("Validation — the four theses already fetched by run_analysis.py")
     print("=" * 78)
     rows = []
-    for spec in R.REAL_DOCS:
+    for spec in specs:
         pages = R.load_or_extract(spec, Path(info[spec.key]["path"]),
                                   info[spec.key]["sha256"])
         doc = R.build_document(spec, pages)

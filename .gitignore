@@ -38,3 +38,6 @@ __pycache__/
 *.pyc
 .DS_Store
 *.err
+
+# Names real works — supply your own; see documents.example.json
+documents.json

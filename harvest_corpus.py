@@ -792,9 +792,12 @@ def focal_check(limit: int | None) -> None:
             log(f"    {k}/{len(ids)}")
 
     log("  rebuilding the focal pair with the identical pipeline ...")
-    info = R.ensure_pdfs(R.REAL_DOCS[:2], True, R.PDF_DIR)
+    specs = R.load_documents()
+    early = next(x for x in specs if x.role == "focal-earlier")
+    late = next(x for x in specs if x.role == "focal-later")
+    info = R.ensure_pdfs((early, late), True, R.PDF_DIR)
     fdocs = {}
-    for spec in R.REAL_DOCS[:2]:
+    for spec in (early, late):
         pages = R.load_or_extract(spec, Path(info[spec.key]["path"]),
                                   info[spec.key]["sha256"])
         fdocs[spec.key] = R.build_document(spec, pages)
@@ -814,8 +817,8 @@ def focal_check(limit: int | None) -> None:
                 out.append(v)
         return out
 
-    A = to_ints(fdocs["ZM2009"])
-    B = to_ints(fdocs["LATER2015"])
+    A = to_ints(fdocs[early.key])
+    B = to_ints(fdocs[late.key])
     runs, _ = R.verbatim_runs(SimpleNamespace(tokens=A), SimpleNamespace(tokens=B))
     log(f"  focal pair: {len(runs)} verbatim runs")
 
@@ -938,8 +941,19 @@ def report() -> None:
         print(f"    {lbl:>12}{c:>12,}{100*c/pairs_done:>12.4f}%")
 
     print()
-    print("  How exceptional is the focal pair? (Writer 2015 vs Fairweather-Blake 2009)")
+    print("  How exceptional is the focal pair, against this corpus?")
+    # Read the focal figures from the run's own summary rather than pinning
+    # them to any particular pair of documents.
     focal = {"share": 0.0321, "max_run": 65, "long_runs": 54, "runs": 509}
+    try:
+        _s = json.loads((HERE / "out" / "summary.json").read_text(encoding="utf-8"))
+        _f = _s["pairs"][_s["focal_pair"]]
+        focal = {"share": _f["matched_share_of_b_all"],
+                 "max_run": _f["verbatim_max_run"],
+                 "long_runs": _f["verbatim_long_runs"],
+                 "runs": _f["verbatim_runs"]}
+    except Exception:
+        pass
     for label, col, val in (("longest run >= 65 words", "max_run", 65),
                             ("runs >= 20 words >= 54", "long_runs", 54),
                             ("shared runs >= 509", "runs", 509)):

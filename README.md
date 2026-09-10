@@ -1,24 +1,41 @@
 # thesisgraph
 
-Reproducible tools for measuring **textual overlap between documents** and for
-**mapping a corpus of doctoral theses** — what it cites, what methods it uses,
-how it writes, and how its subjects connect.
+**A map of what doctoral research actually reads.** 24,656 UK doctoral theses,
+1.7 billion words, 1.5 million citations — turned into a navigable web of
+fields, sub-fields, methods and shared literature.
 
-Built from openly deposited UK doctoral theses. No thesis text is redistributed
-by this repository; see [Copyright](#copyright).
+Built from openly deposited theses. No thesis text is redistributed by this
+repository; see [Copyright](#copyright).
+
+**Live:** [thesisgraph.hammantlabs.com](https://thesisgraph.hammantlabs.com)
 
 ---
 
-## Two things live here
+## The question it answers
 
-**1. A pairwise overlap analyser** (`run_analysis.py`) — measures verbatim and
-near-verbatim overlap between two documents against a control baseline, and
-emits an auditable report, a CSV of every match, and an interactive
-side-by-side viewer.
+Pick any two fields. Which specific works do they *both* read? Which theses cite
+them? What page should you start on?
 
-**2. A corpus toolkit** — harvests a repository over OAI-PMH, extracts and
-analyses tens of thousands of theses, screens the whole corpus for textual
-reuse, and builds an interactive graph of the result.
+That is the useful shape. A number saying two disciplines share 1.1% of their
+literature is not actionable; a list of the four papers that bridge them, the
+theses that cite each one, and a link to the right page, is.
+
+The map also shows where fields **don't** touch. Education and Engineering share
+1.1% of their cited literature; History and Engineering, 0.7%. Those gaps are
+where the bridging opportunities are.
+
+## What's here
+
+**1. The knowledge web** — harvest a repository over OAI-PMH, extract and
+classify tens of thousands of theses, derive an expandable subject tree from the
+data, parse reference lists into a citation graph, and build an interactive map
+of the result.
+
+**2. A pairwise overlap analyser** (`run_analysis.py`) — measures verbatim and
+near-verbatim overlap between two documents against a control baseline. The
+documents are supplied by you in `documents.json`; nothing is built in. See
+[What this measures](#what-this-measures--and-what-it-does-not), which matters
+more than the code does.
 
 ## Quickstart
 
@@ -27,8 +44,14 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
 .venv/bin/python run_analysis.py --selftest     # synthetic fixtures, asserted
-.venv/bin/python run_analysis.py                # download + analyse a pair
+cp documents.example.json documents.json        # then edit it
+.venv/bin/python run_analysis.py                # download + analyse your documents
 ```
+
+The analyser has **no built-in documents**. You name your own in
+`documents.json` (gitignored). `--selftest` is the worked example: it generates
+synthetic fixtures with a deliberately planted shared passage and asserts the
+pipeline recovers it — 34 unit assertions and 22 integration checks.
 
 ## The pairwise analyser
 

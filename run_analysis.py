@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """
-run_analysis.py — reproducible textual-overlap analysis between UK doctoral theses.
+run_analysis.py — reproducible textual-overlap analysis between two documents,
+measured against a control baseline.
 
-Focal pair:
-    EARLIER  Fairweather-Blake, P. (2009), Brunel University      (370 pp)
-    LATER    Writer, B. (2015), Liverpool John Moores University (401 pp)
+The documents to compare are NOT built in. You supply them in `documents.json`
+beside this file (see `documents.example.json` for the shape, and .gitignore,
+which keeps yours out of version control). Two documents carry the roles
+`focal-earlier` and `focal-later`; every other document is a control.
 
-Controls (same discipline, partially overlapping topic):
-    Kushkiev, P. (2022), EdD, Sheffield
-    Alhumaidan, A. (2025), PhD, York
+All pairwise combinations are run, so the baseline is a spread rather than a
+single point. A raw similarity score between two documents in the same field
+means very little on its own; the controls are what make it interpretable.
 
-All six pairwise combinations are run so the baseline is a spread, not a point.
+To see the whole pipeline work end to end without supplying anything, run
+`--selftest`: it generates synthetic fixture documents with a deliberately
+planted shared passage and asserts that the pipeline recovers it.
 
 Every path anchors to this file's location, never the shell's cwd.
 Every artefact is deterministic: no wall-clock, no RNG, no reliance on set or
@@ -18,7 +22,7 @@ dict iteration order.  Two consecutive runs over the same PDFs produce
 byte-identical matches.csv, report.md and viewer.html.
 
 Usage
-    python run_analysis.py                 # full real run
+    python run_analysis.py                 # run over documents.json
     python run_analysis.py --selftest      # synthetic fixtures + assertions
     python run_analysis.py --skip-download # use PDFs already in ./pdfs
     python run_analysis.py --no-embeddings # skip pass 3
@@ -116,62 +120,48 @@ class DocSpec:
     role: str             # "focal-earlier" | "focal-later" | "control"
 
 
-REAL_DOCS: tuple[DocSpec, ...] = (
-    DocSpec(
-        key="ZM2009",
-        short="ZM2009",
-        label="Fairweather-Blake, P. (2009), Brunel University",
-        surname="Fairweather-Blake",
-        surname_regex=r"Fairweather[\s‐-―\-]*Myers",
-        year=2009,
-        filename="earlier_fairweather_blake_2009.pdf",
-        landing_url="https://bura.brunel.ac.uk/handle/2438/4316",
-        pdf_url="https://bura.brunel.ac.uk/bitstream/2438/4316/1/FulltextThesis.pdf",
-        expected_pages=370,
-        role="focal-earlier",
-    ),
-    DocSpec(
-        key="LATER2015",
-        short="LATER2015",
-        label="Writer, B. (2015), Liverpool John Moores University",
-        surname="Writer",
-        surname_regex=r"Writer",
-        year=2015,
-        filename="later_later_2015.pdf",
-        landing_url="https://researchonline.ljmu.ac.uk/id/eprint/4552/",
-        pdf_url="",  # scraped from the landing page
-        expected_pages=401,
-        role="focal-later",
-    ),
-    DocSpec(
-        key="KUSH2022",
-        short="KUSH2022",
-        label="Kushkiev, P. (2022), EdD, University of Sheffield",
-        surname="Kushkiev",
-        surname_regex=r"\bKushkiev\b",
-        year=2022,
-        filename="control_kushkiev_2022.pdf",
-        landing_url="https://etheses.whiterose.ac.uk/id/eprint/31670/",
-        pdf_url="",
-        expected_pages=None,
-        role="control",
-    ),
-    DocSpec(
-        key="ALHU2025",
-        short="ALHU2025",
-        label="Alhumaidan, A. (2025), PhD, University of York",
-        surname="Alhumaidan",
-        surname_regex=r"\bAlhumaidan\b",
-        year=2025,
-        filename="control_alhumaidan_2025.pdf",
-        landing_url="https://etheses.whiterose.ac.uk/id/eprint/38362/",
-        pdf_url="",
-        expected_pages=None,
-        role="control",
-    ),
-)
+DOCUMENTS_JSON = HERE / "documents.json"
 
-FOCAL_PAIR = ("ZM2009", "LATER2015")
+
+def load_documents() -> tuple[DocSpec, ...]:
+    """Read the documents to compare from documents.json.
+
+    Deliberately not hard-coded. This tool measures textual overlap, which is a
+    measurement and not an accusation, and a built-in worked example would name
+    real people as the standing illustration of one. Supply your own documents,
+    or run --selftest, which exercises the entire pipeline on synthetic fixtures
+    with a known planted passage.
+    """
+    if not DOCUMENTS_JSON.exists():
+        raise SystemExit(
+            f"no {DOCUMENTS_JSON.name} found.\n\n"
+            f"Copy documents.example.json to documents.json and fill in the "
+            f"documents you want to compare:\n"
+            f"  cp documents.example.json documents.json\n\n"
+            f"Exactly two entries must have role 'focal-earlier' and "
+            f"'focal-later'; any others are controls.\n"
+            f"To see the pipeline run without supplying anything:\n"
+            f"  python run_analysis.py --selftest"
+        )
+    raw = json.loads(DOCUMENTS_JSON.read_text(encoding="utf-8"))
+    docs = []
+    for d in raw.get("documents", []):
+        sur = d.get("surname") or ""
+        docs.append(DocSpec(
+            key=d["key"], short=d.get("short", d["key"]),
+            label=d.get("label", d["key"]), surname=sur,
+            surname_regex=d.get("surname_regex")
+            or (r"\b" + re.escape(sur) + r"\b" if sur else r"(?!x)x"),
+            year=int(d.get("year") or 0), filename=d["filename"],
+            landing_url=d.get("landing_url", ""), pdf_url=d.get("pdf_url", ""),
+            expected_pages=d.get("expected_pages"),
+            role=d.get("role", "control")))
+    roles = [x.role for x in docs]
+    for need in ("focal-earlier", "focal-later"):
+        if roles.count(need) != 1:
+            raise SystemExit(f"{DOCUMENTS_JSON.name}: exactly one document must "
+                             f"have role '{need}' (found {roles.count(need)})")
+    return tuple(docs)
 
 
 # --------------------------------------------------------------------------- #
@@ -586,7 +576,7 @@ def _suppress_boundary(before: str) -> bool:
         word = m.group(1).lower().strip(".")
         if word in ABBREV:
             return True
-        # Single capital letter => an initial, as in "Fairweather-Blake, P."
+        # Single capital letter => an initial, as in "Fairweather, P."
         if len(m.group(1)) == 1 and m.group(1).isupper():
             return True
         # Dotted initial run such as "P.A" in "Smith, P.A."
@@ -2103,11 +2093,14 @@ def write_report(path: Path, ctx: dict) -> None:
         d = info[k]
         add(f"- `{docs[k].spec.key}` — {d['source_url']}")
     add("")
-    add(f"The two focal deposits were required to be exactly "
-        f"{REAL_DOCS[0].expected_pages} and {REAL_DOCS[1].expected_pages} pages. "
-        f"The pipeline aborts before any analysis if either page count differs, "
-        f"because a different deposit would make every downstream number "
-        f"describe the wrong document. Both matched.")
+    exp = [(docs[k].spec.short, docs[k].spec.expected_pages)
+           for k in ctx["doc_order"] if docs[k].spec.expected_pages]
+    if exp:
+        add("Expected page counts were declared for "
+            + ", ".join(f"{n} ({p} pp)" for n, p in exp)
+            + ". The pipeline aborts before any analysis if a page count "
+              "differs, because a different deposit would make every "
+              "downstream number describe the wrong document. All matched.")
     add("")
     add("### 8.2 Extraction")
     add("")
@@ -3543,7 +3536,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if cache.exists():
             shutil.rmtree(cache)
 
-    run_pipeline(REAL_DOCS, pdf_dir=PDF_DIR, cache_dir=cache, out_dir=OUT_DIR,
+    run_pipeline(load_documents(), pdf_dir=PDF_DIR, cache_dir=cache, out_dir=OUT_DIR,
                  synthetic=False, skip_download=args.skip_download,
                  use_embeddings=not args.no_embeddings, enforce_pages=True)
     log(f"\nArtefacts written to {OUT_DIR}/")
@@ -3554,7 +3547,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             log(f"  {n:<16} {p.stat().st_size:>12,} bytes")
 
     if args.determinism_check:
-        return determinism_check(REAL_DOCS, use_embeddings=not args.no_embeddings)
+        return determinism_check(load_documents(),
+                                 use_embeddings=not args.no_embeddings)
     return 0
 
 

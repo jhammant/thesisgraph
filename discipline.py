@@ -512,47 +512,54 @@ def explain(doc_id: str) -> int:
 
 
 def validate() -> int:
-    """The four theses we already have, all of which are education doctorates."""
-    # Real deposited titles. The DocSpec.label is a citation string and carries
-    # no subject signal, so using it would test the harness, not the classifier.
-    TITLES = {
-        "ZM2009": "An analysis of the concept reflective practice and an "
-                  "investigation into the development of student teachers "
-                  "reflective practice within the context of action research",
-        "LATER2015": "Creating space and providing opportunities for BME "
-                     "academics in higher education",
-        "KUSH2022": "Exploring the interplay between teacher motivation and "
-                    "continuing professional development of EFL teachers",
-        "ALHU2025": "Exploring Gender Stereotypes in First-Grade School "
-                    "Textbooks in The Kingdom of Saudi Arabia",
-    }
-    info = R.ensure_pdfs(R.REAL_DOCS, True, R.PDF_DIR)
-    print("Validation — four known education theses (expected: Education)")
+    """Check the classifier against documents you have supplied yourself.
+
+    Reads titles from documents.json (see documents.example.json). Add an
+    "expect_discipline" field to any entry to assert its label. With no config
+    this reports what it would need rather than failing, because the classifier
+    is exercised anyway by harvest_corpus.py over the whole corpus.
+    """
+    try:
+        specs = R.load_documents()
+    except SystemExit as e:
+        print(str(e).splitlines()[0])
+        print("\n  validate() needs documents.json; see documents.example.json.")
+        print('  Add "title" and "expect_discipline" per entry to assert a label.')
+        return 0
+    raw = json.loads((R.HERE / "documents.json").read_text(encoding="utf-8"))
+    cfg = {d["key"]: d for d in raw.get("documents", [])}
+    info = R.ensure_pdfs(specs, True, R.PDF_DIR)
+    print("Validation — classifier against your own documents")
     print("=" * 70)
-    ok = top2 = 0
-    for spec in R.REAL_DOCS:
+    ok = top2 = n = 0
+    for spec in specs:
+        want = cfg.get(spec.key, {}).get("expect_discipline")
+        title = cfg.get(spec.key, {}).get("title") or spec.label
         pages = R.load_or_extract(spec, Path(info[spec.key]["path"]),
                                   info[spec.key]["sha256"])
         doc = R.build_document(spec, pages)
-        body = " ".join(s.text for s in doc.sentences
-                        if s.included and s.bucket in
+        body = " ".join(x.text for x in doc.sentences
+                        if x.included and x.bucket in
                         ("introduction", "literature_review", "methodology"))[:60000]
-        r = classify_one(TITLES.get(spec.key, spec.label), "", body)
-        good = r["discipline"] == "Education"
-        near = good or r["alt"] == "Education"
+        r = classify_one(title, "", body)
+        if not want:
+            print(f"  ----  {spec.short:<10} -> {r['discipline']:<22} "
+                  f"conf {r['conf']:.2f} via {r['method']} (no expectation set)")
+            continue
+        n += 1
+        good = r["discipline"] == want
+        near = good or r["alt"] == want
         ok += good
         top2 += near
         tag = "PASS" if good else ("TOP-2" if near else "FAIL")
-        print(f"  {tag:<5} {spec.short:<10} -> "
-              f"{r['discipline']:<22} conf {r['conf']:.2f} via {r['method']:<18} "
-              f"(runner-up {r['alt']})")
-    print(f"\n  top-1 {ok}/{len(R.REAL_DOCS)}   top-2 {top2}/{len(R.REAL_DOCS)}")
-    print("  Interdisciplinary theses are genuinely ambiguous, not wrong:")
-    print("  they are flagged `ambiguous` in the DB so cross-field analyses")
-    print("  can exclude them rather than treat them as confidently labelled.")
-    print("  Note: these carry no abstract here, so this exercises the")
-    print("  title+body path, which is the weaker of the two.")
-    return 0 if ok == len(R.REAL_DOCS) else 1
+        print(f"  {tag:<5} {spec.short:<10} -> {r['discipline']:<22} "
+              f"conf {r['conf']:.2f} via {r['method']:<18} (want {want})")
+    if n:
+        print(f"\n  top-1 {ok}/{n}   top-2 {top2}/{n}")
+        print("  Interdisciplinary works are genuinely ambiguous, not wrong:")
+        print("  they are flagged `ambiguous` so cross-field analyses can")
+        print("  exclude them rather than treat them as confidently labelled.")
+    return 0 if (n == 0 or ok == n) else 1
 
 
 def main(argv=None) -> int:
