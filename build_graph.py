@@ -8,7 +8,7 @@ Four linked graphs, all derived from artefacts already produced:
   reuse      theses linked by surviving verbatim text overlap
 """
 from __future__ import annotations
-import csv, json, sqlite3, sys, math
+import csv, json, re, sqlite3, sys, math
 from collections import Counter, defaultdict
 from itertools import combinations
 from pathlib import Path
@@ -38,10 +38,23 @@ year = {r[0]: r[1] for r in m.execute("SELECT id,year FROM doc")}
 
 # ---------------------------------------------------------------- co-citation
 print("co-citation ...", file=sys.stderr)
+# The graph showed norm_title() output — "using thematic analysis psychology"
+# instead of "Using thematic analysis in psychology". Same fix as the reader:
+# recover the real title from cite.raw and group on (surname, year).
+sys.path.insert(0, str(HERE))
+from bridges import clean_title
+
 work_theses = defaultdict(set)
-for src, s, y, t in cdb.execute(
-        "SELECT src,surname,year,title FROM cite WHERE title<>'' AND length(title)>12"):
-    work_theses[(s, y, t)].add(src)
+_titles = defaultdict(Counter)
+for src, s, y, t, raw in cdb.execute(
+        "SELECT src,surname,year,title,raw FROM cite "
+        "WHERE title<>'' AND length(title)>12"):
+    work_theses[(s, y)].add(src)
+    ct = clean_title(raw, y)
+    if ct:
+        _titles[(s, y)][ct] += 1
+DISPLAY = {k: v.most_common(1)[0][0] for k, v in _titles.items() if v}
+work_theses = {k: v for k, v in work_theses.items() if k in DISPLAY}
 top = sorted(work_theses.items(), key=lambda kv: -len(kv[1]))[:TOP_WORKS]
 idx = {k: i for i, (k, _) in enumerate(top)}
 by_thesis = defaultdict(list)
@@ -54,7 +67,8 @@ for s, ws in by_thesis.items():
         co[(a, b)] += 1
 nodes = []
 for k, srcs in top:
-    s, y, t = k
+    s, y = k
+    t = DISPLAY[k]
     dc = Counter(disc.get(x) for x in srcs if disc.get(x))
     nodes.append({"id": idx[k], "label": f"{s.title()} ({y})",
                   "title": t[:70], "n": len(srcs),
