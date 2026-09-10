@@ -158,7 +158,9 @@ function layout(){
       var rings=Math.max(1,Math.round(Math.sqrt(arr.length/2.2)));
       arr.forEach(function(n,i){
         var ring=i%rings, slot=Math.floor(i/rings), per=Math.ceil(arr.length/rings);
-        var rad=R*(0.46+0.5*ring/Math.max(rings,1));
+        /* A single ring sits near the rim rather than at 0.46R, so the top-level
+           view fills the canvas instead of huddling in the middle. */
+        var rad=R*(rings===1 ? 0.88 : 0.50+0.45*ring/(rings-1));
         var a=ang+span*((slot+0.5)/per);
         n.x=Math.cos(a)*rad; n.y=Math.sin(a)*rad; });
     }
@@ -168,6 +170,10 @@ function layout(){
 }
 
 /* ---------------- drawing ---------------- */
+function trim(s){                        // shorten on a word boundary, not mid-word
+  if(s.length<=40) return s;
+  var c=s.slice(0,40), i=c.lastIndexOf(' ');
+  return (i>22?c.slice(0,i):c)+'\u2026'; }
 function tx(n){ return n.x*cam.k+W/2+cam.x; }
 function ty(n){ return n.y*cam.k+Hh/2+cam.y; }
 function draw(){
@@ -184,6 +190,7 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(tx(a),ty(a)); ctx.lineTo(tx(b),ty(b)); ctx.stroke(); }
   ctx.globalAlpha=1;
   var q=(document.getElementById('q').value||'').toLowerCase();
+  var lab=[];
   N.forEach(function(n,i){
     var on=!nb||nb[i], hit=q&&(n.label+' '+n.title).toLowerCase().indexOf(q)>=0;
     ctx.globalAlpha=on?1:0.14;
@@ -191,10 +198,30 @@ function draw(){
     ctx.fillStyle=col(n.grp); ctx.fill();
     if(n.kids&&!open[n.ref]){ ctx.lineWidth=1.6*cam.k; ctx.strokeStyle='#fff8'; ctx.stroke(); }
     if(hit||i===sel){ ctx.lineWidth=2.6; ctx.strokeStyle=hit?'#fff':'#ffb302'; ctx.stroke(); }
-    if(cam.k>0.62&&(n.r>6.5||i===sel||hit||(nb&&nb[i]))){
-      ctx.globalAlpha=on?0.94:0.1; ctx.fillStyle='#e8eaf0';
-      ctx.font=(10.5*Math.min(cam.k,1.6))+'px -apple-system,sans-serif';
-      ctx.fillText(n.label.slice(0,32), tx(n)+n.r*cam.k+4, ty(n)+3.5); } });
+    if(cam.k>0.62)
+      lab.push({n:n,on:on,p:(i===sel?300:hit?200:(nb&&nb[i])?100:0)+n.r}); });
+  /* Labels are placed after every node is drawn, so a label is never painted
+     under a later circle. Each sits on the outward side of its own node, and
+     a collision nudges it clear; a label that cannot be placed within DRIFT
+     of its node is dropped rather than printed over its neighbour. */
+  var DRIFT=26, boxes=[];
+  lab.sort(function(a,b){ return b.p-a.p; });
+  ctx.textBaseline='middle';
+  lab.forEach(function(L){
+    var n=L.n, fs=10.5*Math.min(cam.k,1.6), hh=fs*0.62;
+    ctx.font=fs+'px -apple-system,sans-serif';
+    var t=trim(n.label), w=ctx.measureText(t).width, gap=n.r*cam.k+5;
+    var x=n.x<0 ? tx(n)-gap-w : tx(n)+gap, y0=ty(n), y=y0, clash=true;
+    for(var k=0;k<8&&clash;k++){
+      clash=false;
+      for(var j=0;j<boxes.length;j++){ var o=boxes[j];
+        if(x-3<o.r&&x+w+3>o.l&&y-hh<o.b&&y+hh>o.t){
+          y = (y<=(o.t+o.b)/2) ? o.t-hh-1.5 : o.b+hh+1.5; clash=true; break; } } }
+    if(clash||Math.abs(y-y0)>DRIFT) return;
+    boxes.push({l:x-3,r:x+w+3,t:y-hh,b:y+hh});
+    ctx.globalAlpha=L.on?0.94:0.1; ctx.fillStyle='#e8eaf0';
+    ctx.fillText(t,x,y); });
+  ctx.textBaseline='alphabetic';
   ctx.globalAlpha=1;
 }
 function pick(mx,my){ var best=null,bd=1e9;
@@ -315,6 +342,11 @@ def main():
         VIEWS = [v for v in VIEWS if v[0] != "reuse"]
         G = {k: v for k, v in G.items() if k != "reuse"}
         OUT = PUB
+    # The reader is only published beside the public bundle, so the cross-link
+    # is emitted there and nowhere else — a local build must not offer a 404.
+    xlink = ('<a class="mini" href="bridges.html" style="text-decoration:none;'
+             'line-height:1.9">&#8644; where fields cross over</a>'
+             if args.public else "")
     payload = json.dumps(G, separators=(",", ":"), sort_keys=True).replace("</", "<\\/")
     tpay = json.dumps(T, separators=(",", ":"), sort_keys=True).replace("</", "<\\/")
     tabs = "".join(f'<button class="tab" data-v="{k}">{t}</button>' for k, t, _ in VIEWS)
@@ -333,7 +365,7 @@ def main():
     <label>min edge <input type="range" id="mw" min="0" max="80" value="0">
       <b id="mwv">0</b></label>
     <label><input type="search" id="q" placeholder="search"></label>
-    <button class="mini" id="fit">reset view</button>
+    {xlink}<button class="mini" id="fit">reset view</button>
   </div>
 </header>
 <main>
