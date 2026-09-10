@@ -38,6 +38,39 @@ def field_of(disc, sub):
     return sub or disc
 
 
+# A stored title came from norm_title(), which lowercases and strips stopwords:
+# "A Realist Theory of Science" became "realist theory science". That reads as
+# broken data. The original is still in cite.raw, so recover it.
+_PUB = re.compile(r"\s(?:[A-Z][A-Za-z.& ]{2,28}:|In\b|Journal\b|Proceedings\b|"
+                  r"pp?\.|vol\.|Vol\.|doi|https?://|Available)")
+
+
+def clean_title(raw: str, year: int) -> str:
+    m = re.search(r"\(?\b%d[a-z]?\b\)?" % year, raw or "")
+    if not m:
+        return ""
+    t = raw[m.end():].lstrip(" .,):;")
+    cut = _PUB.search(t)
+    if cut and cut.start() > 12:
+        t = t[:cut.start()]
+    t = re.split(r"(?<=[a-z\"\'\)])\.\s+(?=[A-Z])", t)[0]
+    # Some styles wrap the title in quotes and put the journal after the closing
+    # quote; others leave a bare volume number trailing.
+    t = re.split(r"['\u2019\"\u201d],\s+[A-Z]", t)[0]
+    t = re.sub(r"\s+", " ", t).strip(" .,;:")
+    t = t.strip("'\u2018\u2019\"\u201c\u201d")
+    t = re.sub(r"[\s,]+\d{1,4}\s*$", "", t)          # trailing volume/page
+    t = re.sub(r",\s*[A-Z][A-Za-z ]{2,24}$", "", t)   # trailing journal name
+    t = t.strip(" .,;:")
+    if not (6 <= len(t) <= 160):
+        return ""
+    # reject fragments that are mostly punctuation, digits or initials
+    letters = sum(ch.isalpha() for ch in t)
+    if letters < len(t) * 0.6 or len(t.split()) < 2:
+        return ""
+    return t
+
+
 def score_works():
     m = H.db()
     disc = {r[0]: (r[1], r[2]) for r in m.execute(
@@ -47,10 +80,18 @@ def score_works():
     m.close()
     c = sqlite3.connect(HERE / "corpus" / "citations.db")
     work_src = defaultdict(set)
-    for src, s, y, t in c.execute(
-            "SELECT src,surname,year,title FROM cite WHERE title<>'' AND length(title)>12"):
-        work_src[(s, y, t)].add(src)
+    titles = defaultdict(Counter)
+    for src, s, y, t, raw in c.execute(
+            "SELECT src,surname,year,title,raw FROM cite "
+            "WHERE title<>'' AND length(title)>12"):
+        # (surname, year) identifies a work well enough within a reference list;
+        # grouping on the mangled title split one book across several nodes.
+        work_src[(s, y)].add(src)
+        ct = clean_title(raw, y)
+        if ct:
+            titles[(s, y)][ct] += 1
     c.close()
+    DISPLAY = {k: v.most_common(1)[0][0] for k, v in titles.items() if v}
 
     # how often does each pair of DISCIPLINES co-occur across all works? rare
     # pairs are the interesting ones.
@@ -68,6 +109,8 @@ def score_works():
 
     scored = []
     for w, srcs in work_src.items():
+        if w not in DISPLAY:
+            continue                       # no recoverable title: not displayable
         if len(srcs) > MAX_TOTAL_CITING:
             continue                      # universal literature, not a bridge
         # Field = SUB-field where we have one: "zebrafish models" crossing into
@@ -98,7 +141,8 @@ def score_works():
                 if best is None or sc > best[0]:
                     best = (sc, a, b)
         if best:
-            scored.append({"key": list(w), "score": round(best[0], 3),
+            scored.append({"key": [w[0], w[1], DISPLAY[w]],
+                           "score": round(best[0], 3),
                            "a": best[1], "b": best[2],
                            "fields": {d: sorted(v) for d, v in by.items()
                                       if len(v) >= MIN_SIDE},

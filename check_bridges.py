@@ -36,8 +36,25 @@ def main():
         reqs=[e["params"]["request"]["url"] for e in c.events
               if e.get("method")=="Network.requestWillBeSent"]
         check(all(u.startswith("file:") for u in reqs), "no network requests on load")
+        cells=c.js("document.querySelectorAll('table.mx td.c').length")
+        empty=c.js("document.querySelectorAll('table.mx td.z').length")
+        check(cells>40, f"landing shows the field-pair matrix ({cells} pairs with "
+                        f"shared literature, {empty} with none)")
+        check(c.js("document.querySelectorAll('.bridge').length")==0,
+              "landing does not dump the full list of works")
+        feat=c.js("document.querySelectorAll('.feat').length")
+        check(feat>0, f"landing offers featured crossovers to click ({feat})")
+        c.js("""(function(){var t=document.querySelectorAll('table.mx td.c');
+          var b=null,bv=0;t.forEach(function(e){var v=parseInt(e.textContent||'0',10)||0;
+          if(v>bv){bv=v;b=e;}});(b||t[0]).click();})()""")
+        time.sleep(1.0)
         n=c.js("document.querySelectorAll('.bridge').length")
-        check(n>50, f"bridges rendered ({n})")
+        check(n>0, f"clicking a matrix cell opens that pairing ({n} works)")
+        check(c.js("document.querySelectorAll('#back').length")==1,
+              "a back link returns to the map")
+        c.js("""(function(){var a=document.getElementById('fa'),b=document.getElementById('fb');
+          a.value='';b.value='';a.dispatchEvent(new Event('change'));})()""")
+        time.sleep(0.6)
         opts=c.js("document.querySelectorAll('#fa option').length")
         check(opts>5, f"field selector populated ({opts-1} fields)")
         # filter to a specific distant pairing

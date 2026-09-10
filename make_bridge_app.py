@@ -50,8 +50,8 @@ border-radius:999px;padding:2px 10px;white-space:nowrap}
 .nn{color:var(--mut);font-size:11.5px;white-space:nowrap}
 .body{display:none;border-top:1px solid var(--line);padding:4px 15px 14px}
 .bridge.open .body{display:block}
-.sides{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
-@media(max-width:900px){.sides{grid-template-columns:1fr}}
+.sides{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
+gap:16px;margin-top:10px}
 .side h4{margin:8px 0 8px;font-size:12px;color:var(--acc);text-transform:uppercase;
 letter-spacing:.05em}
 .th{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px;
@@ -66,6 +66,34 @@ margin-bottom:9px}
 .pg q:before{content:'"'}.pg q:after{content:'"'}
 .chip{background:#0f1115;border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:10px}
 .empty{color:var(--mut);padding:40px;text-align:center;font-style:italic}
+.mapwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+padding:16px 18px;margin-bottom:16px}
+.maphead b{color:var(--acc)}
+.mapsub{color:var(--mut);font-size:12px;margin-top:5px;max-width:760px;line-height:1.55}
+.mscroll{overflow-x:auto;margin-top:14px}
+table.mx{border-collapse:separate;border-spacing:2px}
+table.mx th{font-weight:600;font-size:10.5px;color:var(--mut)}
+table.mx th.rl{text-align:right;padding-right:8px;white-space:nowrap;max-width:130px}
+table.mx th.vt{height:104px;vertical-align:bottom;padding:0}
+table.mx th.vt span{display:block;writing-mode:vertical-rl;transform:rotate(180deg);
+white-space:nowrap;margin:0 auto 4px}
+table.mx td{width:26px;height:26px;border-radius:4px;text-align:center;
+font-size:10px;color:#08101f;font-weight:700}
+table.mx td.c{cursor:pointer;outline:1px solid transparent}
+table.mx td.c:hover{outline:2px solid var(--acc2)}
+table.mx td.z{background:#14171f}
+table.mx td.dg{background:#0c0e13}
+.feath{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+margin:16px 0 8px}
+.feat{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+padding:9px 13px;margin-bottom:7px;cursor:pointer;display:flex;gap:10px;
+align-items:baseline;flex-wrap:wrap}
+.feat:hover{border-color:var(--acc)}
+.feat .fw{font-weight:650}
+.feat .ft{color:var(--mut);font-size:12.5px;flex:1 1 240px}
+.backrow{margin-bottom:12px}
+.backlink{color:var(--acc);cursor:pointer;font-size:12.5px;text-decoration:none}
+.backlink:hover{text-decoration:underline}
 .roster{background:var(--panel);border:1px solid var(--acc);border-radius:11px;
 padding:12px 15px;margin-bottom:16px}
 .rh{font-size:12.5px;font-weight:650;margin-bottom:4px}
@@ -181,16 +209,99 @@ function roster(vis){
             '<div class="docwrap" data-for="'+esc(r.id)+'"></div></div>'; }).join('')+
         '</div>'; }).join('')+'</div></div>';
 }
+/* ---------- the map: every discipline pair, as a clickable matrix --------- */
+var MATRIX=null;
+function matrixData(){
+  if(MATRIX) return MATRIX;
+  var pairs={}, tot={};
+  W.forEach(function(w){
+    var k=[w.a,w.b].sort().join('\u0000');
+    pairs[k]=(pairs[k]||0)+1;
+    tot[w.a]=(tot[w.a]||0)+1; tot[w.b]=(tot[w.b]||0)+1;
+  });
+  var fields=Object.keys(tot).sort(function(x,y){return tot[y]-tot[x]||(x<y?-1:1);});
+  var max=0; for(var k in pairs) if(pairs[k]>max) max=pairs[k];
+  MATRIX={fields:fields,pairs:pairs,max:max,tot:tot};
+  return MATRIX;
+}
+function shortName(f){
+  return f.replace('History, philosophy and religion','History & philosophy')
+          .replace('Language and literature','Language & lit')
+          .replace('Business and economics','Business & econ')
+          .replace('Medicine and health','Medicine')
+          .replace('Earth and environment','Earth & env')
+          .replace('Biological sciences','Biology')
+          .replace('Physical sciences','Physics & chem')
+          .replace('Social sciences','Social science')
+          .replace('Arts and media','Arts & media')
+          .replace('Sport and agriculture','Sport & agri');
+}
+function renderMatrix(){
+  var m=matrixData(), f=m.fields, n=f.length, out=[];
+  out.push('<div class="mapwrap"><div class="maphead">'+
+    '<div><b>'+W.length.toLocaleString()+'</b> works bridge two fields'+
+    ' &middot; <b>'+Object.keys(m.pairs).length+'</b> of '+(n*(n-1)/2)+
+    ' possible pairings have one</div>'+
+    '<div class="mapsub">Every cell is a pair of disciplines. Brighter means more '+
+    'shared literature; <b>empty means they read nothing in common</b>. '+
+    'Click a cell to read the works that bridge them.</div></div>');
+  out.push('<div class="mscroll"><table class="mx"><tr><th></th>');
+  f.forEach(function(c){ out.push('<th class="vt"><span>'+esc(shortName(c))+'</span></th>'); });
+  out.push('</tr>');
+  f.forEach(function(r,ri){
+    out.push('<tr><th class="rl">'+esc(shortName(r))+'</th>');
+    f.forEach(function(c,ci){
+      if(ci===ri){ out.push('<td class="dg"></td>'); return; }
+      var v=m.pairs[[r,c].sort().join('\u0000')]||0;
+      if(!v){ out.push('<td class="z" title="'+esc(r)+' \u21c4 '+esc(c)+
+        ' — no shared literature"></td>'); return; }
+      var t=Math.pow(v/m.max,0.45);
+      out.push('<td class="c" style="background:rgba(91,156,255,'+(0.10+0.85*t).toFixed(3)+')"'+
+        ' data-a="'+esc(r)+'" data-b="'+esc(c)+'" title="'+esc(r)+' \u21c4 '+esc(c)+
+        ' — '+v+' bridging work'+(v===1?'':'s')+'">'+(v>=10?v:'')+'</td>');
+    });
+    out.push('</tr>');
+  });
+  out.push('</table></div></div>');
+  return out.join('');
+}
+function featured(){
+  /* a few strong, legible crossovers so the page opens on something real */
+  var picks=W.filter(function(w){
+    var n=0; for(var k in w.sides) n+=w.sides[k].length;
+    return n>=6 && w.a!==w.b;
+  }).slice(0,10);
+  if(!picks.length) return '';
+  return '<div class="feath">Or start with one of these</div>'+
+    picks.map(function(w){
+      var i=W.indexOf(w);
+      return '<div class="feat" data-a="'+esc(w.a)+'" data-b="'+esc(w.b)+'">'+
+        '<span class="fw">'+esc(w.w)+'</span> <span class="ft">'+esc(w.title)+'</span>'+
+        '<span class="pair"><b>'+esc(w.a)+'</b> \u21c4 <b>'+esc(w.b)+'</b></span></div>';
+    }).join('');
+}
+
 function render(){
+  var landing = !A.value && !Bx.value && !(Q.value||'').trim();
+  if(landing){
+    C.textContent='';
+    L.innerHTML=renderMatrix()+featured();
+    L.querySelectorAll('td.c, .feat').forEach(function(el){
+      el.onclick=function(){ A.value=el.dataset.a; Bx.value=el.dataset.b;
+        render(); window.scrollTo(0,0); };
+    });
+    return;
+  }
   var vis=W.filter(match);
   C.textContent=vis.length+' bridging work'+(vis.length===1?'':'s')+
     (A.value||Bx.value?' for this pairing':'')+
     ' · '+vis.reduce(function(a,w){var n=0;for(var k in w.sides)n+=w.sides[k].length;return a+n;},0)+
     ' theses · click a work to read the passages';
-  if(!vis.length){ L.innerHTML='<div class="empty">No bridging works found for that '+
+  var back='<div class="backrow"><a class="backlink" id="back">\u2190 back to the map</a></div>';
+  if(!vis.length){ L.innerHTML=back+'<div class="empty">No bridging works found for that '+
     'pairing. Not every pair of fields shares specific literature — that absence '+
     'is itself the finding.</div>'; return; }
-  L.innerHTML=roster(vis)+vis.map(function(w,i){
+  L.innerHTML=back+roster(vis)+vis.map(function(w,i){
     var sides=Object.keys(w.sides).sort(function(x,y){
       return w.sides[y].length-w.sides[x].length; });
     return '<div class="bridge" data-i="'+i+'">'+
@@ -202,7 +313,7 @@ function render(){
           return shown<w.n?' · '+shown+' with a located passage':'';})()+
       '</span></div>'+
       '<div class="body"><div class="sides">'+
-      sides.slice(0,2).map(function(k){
+      sides.map(function(k){
         return '<div class="side"><h4>'+esc(k)+' ('+w.sides[k].length+')</h4>'+
           w.sides[k].map(function(e){
             return '<div class="th"><div class="t">'+
@@ -213,8 +324,10 @@ function render(){
               '<div class="docwrap" data-for="'+esc(e.id||'')+'"></div>'+
               e.p.map(function(p){return passage(p,e);}).join('')+'</div>'; }).join('')+
           '</div>'; }).join('')+
-      '</div>'+(sides.length>2?'<div class="nn" style="margin-top:8px">also cited in: '+
-        sides.slice(2).map(esc).join(', ')+'</div>':'')+'</div></div>'; }).join('');
+      '</div></div></div>'; }).join('');
+  var bk=document.getElementById('back');
+  if(bk) bk.onclick=function(){ A.value=''; Bx.value=''; Q.value=''; render();
+                                window.scrollTo(0,0); };
   L.querySelectorAll('.bh').forEach(function(h){
     h.onclick=function(){ h.parentNode.classList.toggle('open'); }; });
   L.querySelectorAll('.drill').forEach(function(a){
