@@ -18,6 +18,8 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "out" / "demo"
 W, H = 1600, 1000
 FIELD_A, FIELD_B = "Computing", "Language and literature"
+THUMB_TITLE = "What 24,656 PhDs actually read"
+THUMB_SUB = "Every doctoral thesis in White Rose \u00b7 1.5M references, mapped"
 
 SEQ = []
 
@@ -90,6 +92,53 @@ def zoom(c, name, steps=6, into=True, hold=1):
         shot(c, f"{name}-hold")
 
 
+def make_thumbs(select_frame):
+    """Write the three post thumbnails from the selected-discipline frame.
+
+    Stills, not renders: every pixel is a frame the video actually contains.
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("  thumbnails skipped (no Pillow)")
+        return
+    src = Image.open(select_frame)                       # 2x DPI, 3200x2000
+    src.resize((W, H), Image.LANCZOS).save(OUT / "thumb-full.png")
+
+    # canvas only: the aside starts at 2560 and the header is 109 tall at 2x
+    CANVAS_R, HEADER = 2560, 109
+    ch = int(CANVAS_R / (W / H))
+    top = HEADER + (src.height - HEADER - ch) // 2
+    graph = src.crop((0, top, CANVAS_R, top + ch)).resize((W, H), Image.LANCZOS)
+    graph.save(OUT / "thumb-graph.png")
+
+    def font(sz, bold=False):
+        for f in ("/System/Library/Fonts/Helvetica.ttc",
+                  "/System/Library/Fonts/SFNS.ttf"):
+            try: return ImageFont.truetype(f, sz, index=1 if bold else 0)
+            except Exception:
+                try: return ImageFont.truetype(f, sz)
+                except Exception: pass
+        return ImageFont.load_default()
+
+    # The map is letterboxed above the caption rather than covered by a scrim:
+    # a scrim swallowed the labels at the foot of the graph. The card takes the
+    # canvas's own background colour so the letterbox leaves no visible seam.
+    BAND = 208
+    card = Image.new("RGB", (W, H), graph.convert("RGB").getpixel((8, 8)))
+    gh = H - BAND
+    gw = int(graph.width * gh / graph.height)
+    card.paste(graph.resize((gw, gh), Image.LANCZOS), ((W - gw) // 2, 0))
+    d = ImageDraw.Draw(card)
+    d.rectangle([0, gh, W, H], fill=(11, 15, 26))
+    d.line([(0, gh), (W, gh)], fill=(32, 41, 60), width=2)
+    d.text((56, gh + 42), THUMB_TITLE, font=font(56, True), fill=(232, 234, 240))
+    d.text((56, gh + 122), THUMB_SUB, font=font(30), fill=(127, 168, 216))
+    card.save(OUT / "thumb-titled.png")
+    for n in ("thumb-titled", "thumb-graph", "thumb-full"):
+        print(f"  thumb : {OUT / (n + '.png')}")
+
+
 def main():
     target = HERE / "out" / "public" / "index.html"
     if not target.exists():
@@ -100,6 +149,7 @@ def main():
         "--no-first-run", "--remote-allow-origins=*", "--disable-gpu",
         "--hide-scrollbars", f"--window-size={W},{H}", "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    select_frame = None
     try:
         ws = None
         for _ in range(150):
@@ -128,7 +178,8 @@ def main():
         hover(c, a); time.sleep(0.4); shot(c, "hover", hold=10)
 
         # 3. select it: the panel lists what it links to, ⇄ marking cross-field
-        click(c, a); time.sleep(0.6); shot(c, "select", hold=22)
+        click(c, a); time.sleep(0.6)
+        select_frame = shot(c, "select", hold=22)
 
         # 4. click again to split it into its sub-fields
         click(c, a); time.sleep(0.9); shot(c, "split", hold=22)
@@ -179,6 +230,7 @@ def main():
         print(f"\n  video: {mp4}  ({mp4.stat().st_size/1e6:.1f} MB, "
               f"{len(SEQ)*0.1:.0f}s, {len(SEQ)} frames)")
     print(f"  stills: {OUT}")
+    make_thumbs(select_frame)
 
 
 if __name__ == "__main__":
