@@ -41,3 +41,7 @@ __pycache__/
 
 # Names real works — supply your own; see documents.example.json
 documents.json
+
+# Session transcripts: this repo is public — never commit them.
+# They are archived privately by closecode/scripts/backup-sessions.
+.sessions/
