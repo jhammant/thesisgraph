@@ -46,6 +46,23 @@ Neighbouring fields trade theory; works that cross the whole university are
 methods. Most method-driven pairs: Computing x Maths 70.5%, Engineering x Maths
 70.4%. Least: History x Social sciences 24.0%, Arts x History 24.7%.
 
+## Session infrastructure built this session (lives in ~/.claude, NOT in this repo)
+- `/closecode` now **never** commits transcripts to a public repo — it gitignores
+  `.sessions/` instead. Previously it asked; now it does not, because a public
+  repo is forever and redaction catches secret shapes, not unreleased drafts or
+  third-party names.
+- `~/.claude/skills/closecode/scripts/backup-sessions` mirrors `~/.claude/projects`
+  into **private** `github.com/jhammant/claude-transcript-archive`, scrubbed and
+  gzipped (750MB raw -> 313MB repo). 881 transcripts, 140 secrets redacted.
+- launchd agent `com.jhammant.claude-transcript-backup` runs it every 2h and at
+  login; logs to `~/Library/Logs/claude-transcript-backup.log`.
+- Restore is tested, not assumed: a real transcript was deleted and recovered
+  byte-identical. `--restore DIR` clones, `--reinstall` expands back into
+  `~/.claude/projects`. Existing transcripts are never overwritten without
+  `--force`. Slugs start with `-`, so use `--project=-Users-...`.
+- **`~/.claude` is not version controlled**, so all of the above exists only on
+  this machine. Worth folding into a dotfiles repo.
+
 ## Next steps
 1. Rewrite post #18 around the gradient, not "fields are joined by methods".
    Also update Braun & Clarke: 683 -> **857** citing theses.
@@ -55,6 +72,10 @@ methods. Most method-driven pairs: Computing x Maths 70.5%, Engineering x Maths
    uses 3.9M references instead of 1.5M, then redeploy.
 4. Re-run `bridge_types.py` after reconciliation; merge editions of the same
    work (Denzin 2005/2011/2018 are legitimately distinct, but may want merging).
+5. A GROBID container (`grobid/grobid:0.9.1-crf`, native arm64) is still running
+   and has been up 14h. Needed only for `regrobid.py`; `docker rm -f grobid` to
+   reclaim the memory. Note the Docker *daemon* went unresponsive under the full
+   reparse load — the container itself was fine throughout.
 
 ## Open questions (not mine to decide)
 - Send jhammant@gmail.com to OpenAlex for the polite pool? Not done unasked.
@@ -83,3 +104,6 @@ methods. Most method-driven pairs: Computing x Maths 70.5%, Engineering x Maths
 
 ---
 _Updated by `forkcode close` on 2026-09-11T13:35+01:00_
+
+---
+_Updated by `forkcode close` on 2026-09-11T13:45+01:00_
